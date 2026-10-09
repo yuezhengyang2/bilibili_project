@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B站视频数据分析看板</title>
+
+    <!-- ★ 粉色立体对勾 favicon（内嵌 SVG，无需外部文件）★ -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='body' x1='20%25' y1='10%25' x2='80%25' y2='95%25'%3E%3Cstop offset='0%25' stop-color='%23ffd6e2'/%3E%3Cstop offset='40%25' stop-color='%23ff9ebc'/%3E%3Cstop offset='100%25' stop-color='%23e84a7a'/%3E%3C/linearGradient%3E%3CradialGradient id='shine' cx='35%25' cy='25%25' r='55%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff' stop-opacity='0.85'/%3E%3Cstop offset='60%25' stop-color='%23ffffff' stop-opacity='0'/%3E%3C/radialGradient%3E%3Cfilter id='shadow' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeDropShadow dx='0' dy='2' stdDeviation='2' flood-color='%23b8305c' flood-opacity='0.45'/%3E%3C/filter%3E%3C/defs%3E%3Cg filter='url(%23shadow)'%3E%3Cpath d='M20 34 L29 43 L45 23' fill='none' stroke='url(%23body)' stroke-width='10' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M20 34 L29 43 L45 23' fill='none' stroke='url(%23shine)' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' transform='translate(-1.2,-1.5)'/%3E%3C/g%3E%3C/svg%3E">
+
+    <style>
+        /* ===== 全局样式 ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            padding: 20px;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+
+        /* ===== 头部 ===== */
+        .header {
+            background: linear-gradient(135deg, #fb7299, #ff8ea3);
+            color: #fff;
+            padding: 30px 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(251, 114, 153, 0.35);
+        }
+        .header h1 { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+        .header h1 span { font-weight: 300; font-size: 18px; opacity: 0.85; }
+        .header .time { font-size: 14px; opacity: 0.9; }
+
+        /* ===== 统计卡片 ===== */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 18px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #fff;
+            padding: 22px 20px;
+            border-radius: 14px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-3px); }
+        .stat-card .num { font-size: 32px; font-weight: 700; color: #fb7299; line-height: 1.3; }
+        .stat-card .label { font-size: 14px; color: #888; margin-top: 4px; }
+
+        /* ===== 搜索栏 ===== */
+        .search-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .search-bar input {
+            flex: 1; min-width: 200px; padding: 12px 18px;
+            border: 2px solid #e8e8e8; border-radius: 30px;
+            font-size: 15px; outline: none; transition: 0.2s;
+        }
+        .search-bar input:focus { border-color: #fb7299; }
+        .search-bar button {
+            padding: 12px 30px; background: #fb7299; color: #fff;
+            border: none; border-radius: 30px; font-size: 15px;
+            cursor: pointer; transition: 0.2s; font-weight: 600;
+        }
+        .search-bar button:hover { background: #e86185; }
+
+        /* ===== 视频表格 ===== */
+        .table-wrap {
+            background: #fff; border-radius: 14px; padding: 20px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow-x: auto;
+        }
+        .table-wrap h2 { font-size: 18px; margin-bottom: 16px; color: #333; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th {
+            background: #f7f8fc; text-align: left; padding: 12px 10px;
+            font-weight: 600; color: #555; border-bottom: 2px solid #eee;
+        }
+        td { padding: 12px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+        td a { color: #fb7299; text-decoration: none; font-weight: 500; }
+        td a:hover { text-decoration: underline; }
+        .badge {
+            display: inline-block; background: #f0f0f0; padding: 2px 12px;
+            border-radius: 20px; font-size: 12px; color: #666;
+        }
+        .view-num { font-weight: 600; color: #333; }
+
+        /* ===== 分页 ===== */
+        .pagination {
+            display: flex; justify-content: center; gap: 8px;
+            margin-top: 18px; flex-wrap: wrap;
+        }
+        .pagination button {
+            padding: 8px 16px; border: 1px solid #ddd; background: #fff;
+            border-radius: 8px; cursor: pointer; transition: 0.2s; font-size: 14px;
+        }
+        .pagination button:hover { background: #f5f5f5; }
+        .pagination button.active { background: #fb7299; color: #fff; border-color: #fb7299; }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ===== 图表区域 ===== */
+        .charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 24px;
+            margin-top: 30px;
+        }
+        .chart-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 18px 18px 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.28s ease, box-shadow 0.28s ease;
+        }
+        /* ★ 鼠标经过浮动效果 ★ */
+        .chart-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 14px 30px rgba(251, 114, 153, 0.28);
+        }
+        .chart-card h3 { font-size: 15px; color: #555; margin-bottom: 10px; }
+        .chart-card img {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #f0f0f0;
+            transition: transform 0.28s ease;
+        }
+        .chart-card:hover img { transform: scale(1.03); }
+        .chart-card .hint {
+            font-size: 12px; color: #bbb; margin-top: 8px;
+            transition: color 0.2s;
+        }
+        .chart-card:hover .hint { color: #fb7299; }
+
+        /* ===== ★ 灯箱效果（点击放大）★ ===== */
+        .lightbox {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.82);
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            animation: fadeIn 0.25s ease;
+        }
+        .lightbox.show { display: flex; }
+        .lightbox img {
+            max-width: 95%;
+            max-height: 92vh;
+            border-radius: 12px;
+            box-shadow: 0 0 60px rgba(251, 114, 153, 0.5);
+            animation: zoomIn 0.3s ease;
+        }
+        .lightbox .close {
+            position: absolute;
+            top: 22px; right: 32px;
+            font-size: 42px;
+            color: #fff;
+            cursor: pointer;
+            line-height: 1;
+            transition: transform 0.2s, color 0.2s;
+            user-select: none;
+        }
+        .lightbox .close:hover { color: #fb7299; transform: rotate(90deg); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn {
+            from { transform: scale(0.85); opacity: 0; }
+            to   { transform: scale(1); opacity: 1; }
+        }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 600px) {
+            .header { flex-direction: column; text-align: center; gap: 10px; }
+            .header h1 { font-size: 22px; }
+            .stats { grid-template-columns: 1fr 1fr; }
+            .charts { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ====== 头部 ====== -->
+    <header class="header">
+        <h1>📺 B站视频数据分析 <span>| 热门视频看板</span></h1>
+        <div class="time">
+    <div id="currentTime"></div>
+    <div id="lastUpdate" style="margin-top:4px;font-size:13px;opacity:0.95;">📊 数据更新于 --</div>
+</div>
+    </header>
+
+    <!-- ====== 统计卡片 ====== -->
+    <section class="stats" id="stats">
+        <div class="stat-card"><div class="num" id="totalVideos">--</div><div class="label">📹 视频总数</div></div>
+        <div class="stat-card"><div class="num" id="totalViews">--</div><div class="label">👁️ 总播放量</div></div>
+        <div class="stat-card"><div class="num" id="avgInteract">--</div><div class="label">📊 平均互动率</div></div>
+        <div class="stat-card"><div class="num" id="totalOwners">--</div><div class="label">👤 UP主总数</div></div>
+    </section>
+
+    <!-- ====== 搜索和表格 ====== -->
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="🔍 搜索视频标题..." onkeyup="if(event.key==='Enter') searchVideos()">
+        <button onclick="searchVideos()">搜索</button>
+        <button onclick="resetSearch()" style="background:#888;">重置</button>
+    </div>
+
+    <div class="table-wrap">
+        <h2>📋 视频列表</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:50px;">#</th>
+                    <th style="min-width:200px;">标题</th>
+                    <th>UP主</th>
+                    <th>播放量</th>
+                    <th>点赞</th>
+                    <th>热度分</th>
+                    <th>链接</th>
+                </tr>
+            </thead>
+            <tbody id="videoTableBody">
+                <tr><td colspan="7" style="text-align:center;color:#999;">加载中...</td></tr>
+            </tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- ====== 图表区域（点击放大）====== -->
+    <section class="charts" id="chartArea">
+        <div class="chart-card" onclick="openLightbox('/docs/图1_分区分布饼图.png')">
+            <h3>📊 分区分布</h3>
+            <img src="/docs/图1_分区分布饼图.png" alt="分区分布">
+            <div class="hint">🔍 点击查看大图</div>
+        </div>
+        <div class="chart-card" onclick="openLightbox('/docs/图2_播放量TOP10条形图.png')">
+            <h3>🏆 播放量 TOP10</h3>
+            <img src="/docs/图2_播放量TOP10条形图.png" alt="播放量TOP10">
+            <div class="hint">🔍 点击查看大图</div>
+        </div>
+        <div class="chart-card" onclick="openLightbox('/docs/图3_互动率分布直方图.png')">
+            <h3>📈 互动率分布</h3>
+            <img src="/docs/图3_互动率分布直方图.png" alt="互动率分布">
+            <div class="hint">🔍 点击查看大图</div>
+        </div>
+        <div class="chart-card" onclick="openLightbox('/docs/图4_标题词云图.png')">
+            <h3>☁️ 标题词云</h3>
+            <img src="/docs/图4_标题词云图.png" alt="词云">
+            <div class="hint">🔍 点击查看大图</div>
+        </div>
+        <div class="chart-card" onclick="openLightbox('/docs/图5_播放量与互动率散点图.png')">
+            <h3>🔍 播放 vs 互动率</h3>
+            <img src="/docs/图5_播放量与互动率散点图.png" alt="散点图">
+            <div class="hint">🔍 点击查看大图</div>
+        </div>
+        <div class="chart-card" onclick="openLightbox('/docs/图6_综合热度分TOP10.png')">
+            <h3>🔥 综合热度 TOP10</h3>
+            <img src="/docs/图6_综合热度分TOP10.png" alt="热度TOP10">
+            <div class="hint">🔍 点击查看大图</div>
+        </div>
+    </section>
+
+</div>
+
+<!-- ====== 灯箱（点击放大）====== -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+    <span class="close" onclick="closeLightbox(event)">&times;</span>
+    <img id="lightboxImg" src="" alt="放大图">
+</div>
+
+<script>
+// 1. 时间显示（当前时间每秒跳动 + 数据更新时间）
+// ==========================================
+function updateTime() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    document.getElementById('currentTime').textContent = `📅 ${y}/${m}/${d} ${hh}:${mm}:${ss}`;
+}
+
+async function loadLastUpdate() {
+    try {
+        const res = await fetch('/api/last_update');
+        const data = await res.json();
+        document.getElementById('lastUpdate').textContent = `📊 数据更新于 ${data.last_update}`;
+    } catch (e) {
+        console.error('获取更新时间失败', e);
+    }
+}
+
+updateTime();
+setInterval(updateTime, 1000);
+loadLastUpdate();
+
+    // ==========================================
+    // 2. 灯箱控制
+    // ==========================================
+    function openLightbox(src) {
+        const lb = document.getElementById('lightbox');
+        document.getElementById('lightboxImg').src = src;
+        lb.classList.add('show');
+        document.body.style.overflow = 'hidden'; // 禁止背景滚动
+    }
+
+    function closeLightbox(e) {
+        // 点击图片本身不关闭，点击背景或关闭按钮才关闭
+        if (e && e.target.id === 'lightboxImg') return;
+        const lb = document.getElementById('lightbox');
+        lb.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+
+    // 按 ESC 关闭灯箱
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeLightbox();
+    });
+
+    // ==========================================
+    // 3. 加载统计数据
+    // ==========================================
+    async function loadStats() {
+        try {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+            document.getElementById('totalVideos').textContent = data.total_videos;
+            document.getElementById('totalViews').textContent = data.total_views;
+            document.getElementById('avgInteract').textContent = data.avg_interact;
+            document.getElementById('totalOwners').textContent = data.total_owners;
+        } catch (e) {
+            console.error('加载统计数据失败', e);
+        }
+    }
+
+    // ==========================================
+    // 4. 加载视频列表
+    // ==========================================
+    let currentPage = 1;
+    let currentKeyword = '';
+
+    async function loadVideos(page = 1, keyword = '') {
+        currentPage = page;
+        currentKeyword = keyword;
+        try {
+            const url = `/api/videos?page=${page}&keyword=${encodeURIComponent(keyword)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            const tbody = document.getElementById('videoTableBody');
+            if (data.videos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">暂无数据</td></tr>';
+            } else {
+                tbody.innerHTML = data.videos.map((v, i) => `
+                    <tr>
+                        <td>${(page - 1) * data.per_page + i + 1}</td>
+                        <td><strong>${v.title}</strong></td>
+                        <td>${v.owner}</td>
+                        <td class="view-num">${v.view.toLocaleString()}</td>
+                        <td>${v.like_count.toLocaleString()}</td>
+                        <td><span class="badge">${v.heat_score.toFixed(2)}</span></td>
+                        <td><a href="${v.url}" target="_blank">🔗 观看</a></td>
+                    </tr>
+                `).join('');
+            }
+
+            renderPagination(data.page, data.total_pages);
+
+        } catch (e) {
+            console.error('加载视频列表失败', e);
+        }
+    }
+
+    // ==========================================
+    // 5. 分页控件
+    // ==========================================
+    function renderPagination(current, total) {
+        const container = document.getElementById('pagination');
+        if (total <= 1) { container.innerHTML = ''; return; }
+
+        let html = `<button onclick="loadVideos(1, '${currentKeyword}')" ${current===1?'disabled':''}>首页</button>`;
+        html += `<button onclick="loadVideos(${current-1}, '${currentKeyword}')" ${current<=1?'disabled':''}>‹</button>`;
+
+        for (let i = Math.max(1, current-2); i <= Math.min(total, current+2); i++) {
+            html += `<button onclick="loadVideos(${i}, '${currentKeyword}')" class="${i===current?'active':''}">${i}</button>`;
+        }
+
+        html += `<button onclick="loadVideos(${current+1}, '${currentKeyword}')" ${current>=total?'disabled':''}>›</button>`;
+        html += `<button onclick="loadVideos(${total}, '${currentKeyword}')" ${current===total?'disabled':''}>末页</button>`;
+
+        container.innerHTML = html;
+    }
+
+    // ==========================================
+    // 6. 搜索功能
+    // ==========================================
+    function searchVideos() {
+        const keyword = document.getElementById('searchInput').value.trim();
+        loadVideos(1, keyword);
+    }
+
+    function resetSearch() {
+        document.getElementById('searchInput').value = '';
+        loadVideos(1, '');
+    }
+
+    // ==========================================
+    // 7. 页面加载 + 自动刷新
+    // ==========================================
+    loadStats();
+    loadVideos(1, '');
+
+    // ★ 每 30 秒自动刷新一次数据（前端）
+    setInterval(() => {
+        console.log('🔄 自动刷新数据...', new Date().toLocaleTimeString());
+        loadStats();
+        loadVideos(currentPage, currentKeyword);
+        loadLastUpdate();  // ★ 同步刷新"数据更新于"
+    }, 30000);
+</script>
+
+</body>
+</html>
